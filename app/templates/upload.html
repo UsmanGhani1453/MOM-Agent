@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Upload Meeting</title>
+</head>
+
+<body>
+
+    <h1>Upload Meeting</h1>
+
+    {% if error %}
+
+        <p style="color: red;">
+            {{ error }}
+        </p>
+
+    {% endif %}
+
+
+    {% if success %}
+
+        <p style="color: green;">
+            {{ success }}
+        </p>
+
+    {% endif %}
+
+
+    <form
+        action="/upload"
+        method="post"
+        enctype="multipart/form-data"
+    >
+
+        <input
+            type="file"
+            name="file"
+            accept=".mp3,.wav,.m4a,.mp4"
+            required
+        >
+
+        <br><br>
+
+        <button type="submit">
+            Upload Meeting
+        </button>
+
+    </form>
+
+
+    {% if transcript %}
+
+        <hr>
+
+        <h2>Meeting Transcript</h2>
+
+        <textarea
+            rows="25"
+            style="width: 100%;"
+            readonly
+        >{{ transcript }}</textarea>
+
+    {% endif %}
+
+
+    <br>
+
+    <a href="/">
+        Back to Dashboard
+    </a>
+
+</body>
+
+</html>

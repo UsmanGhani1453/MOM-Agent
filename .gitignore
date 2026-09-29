@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Environment variables
+.env
+.env.*
+
+# Meeting recordings
+uploads/*
+!uploads/.gitkeep
+
+# Generated documents
+outputs/*
+!outputs/.gitkeep
+
+# Local database
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
