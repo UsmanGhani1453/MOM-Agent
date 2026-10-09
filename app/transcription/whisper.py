@@ -8,11 +8,13 @@ class Transcriber:
     """Loads the Whisper model once, on first use, and reuses it."""
 
     def __init__(self, model: str = "base", device: str = "cpu",
-                 compute_type: str = "int8", language: str | None = None):
+                 compute_type: str = "int8", language: str | None = None,
+                 names_hint: str = ""):
         self.model_name = model
         self.device = device
         self.compute_type = compute_type
         self.language = language
+        self.names_hint = names_hint  # councillor names, so Whisper spells them consistently
         self._model = None
         self._lock = threading.Lock()
 
@@ -31,8 +33,11 @@ class Transcriber:
     def transcribe(self, audio_path: str) -> str:
         model = self._load()
         log.info("Transcribing %s", audio_path)
+        kwargs = {}
+        if self.names_hint:
+            kwargs["initial_prompt"] = f"Meeting participants: {self.names_hint}."
         segments, info = model.transcribe(
-            audio_path, beam_size=5, vad_filter=True, language=self.language
+            audio_path, beam_size=5, vad_filter=True, language=self.language, **kwargs
         )
         parts = [s.text.strip() for s in segments if s.text.strip()]
         return " ".join(parts)

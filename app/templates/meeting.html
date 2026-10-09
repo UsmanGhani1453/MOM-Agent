@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}{{ m.title }} | MOM Agent{% endblock %}
+{% block title %}{{ (m.minutes.meeting_title if m.minutes and m.minutes.meeting_title else m.filename) }} | MOM Agent{% endblock %}
 {% block content %}
 
 <div class="meeting-header">
   <div>
-    <h1 style="margin-bottom: 0;">{{ m.title }}</h1>
+    <h1 style="margin-bottom: 0;">{{ (m.minutes.meeting_title if m.minutes and m.minutes.meeting_title else m.filename) }}</h1>
     <div class="meeting-meta">
       <span>
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">

@@ -33,6 +33,20 @@ macOS/Linux: same steps, `source venv/bin/activate`, then `python scripts/check_
 4. If a step fails you see the reason and a **Retry** button. The transcript is saved, so a retry
    after an Ollama problem does not re-transcribe.
 
+## Getting clean, official-looking minutes
+
+The first version produced council-specific minutes with duplicated names and assistant chatter. Three things fix that:
+
+1. **Roster (optional, for a regular group).** Works for any recording without it; participants are taken from the audio. If the same people meet regularly, copy `data/roster.example.json` to `data/roster.json` and put in your real
+   mayor, councillors and staff (add misspellings as `aliases`). Names are then spelled one way everywhere:
+   the roster is given to Whisper, to the LLM prompt, and used to merge variants afterwards.
+2. **Strict prompt + cleanup.** The model must write formal minutes only. If it adds commentary
+   ("This is a great summary...", "Possible Questions"), the app retries and then strips it.
+3. **New PDF layout.** Letterhead, details block, attendance, rendered headings, motions table,
+   decisions, action items, and a signature block. Empty sections are left out.
+
+Set `MOM_ORG_NAME` (letterhead) and `MOM_SIGNATORIES` (signature lines) in `.env`.
+
 ## Configuration (all optional)
 
 Copy `.env.example` to `.env`. Common settings:
@@ -44,6 +58,9 @@ Copy `.env.example` to `.env`. Common settings:
 | `MOM_WHISPER_MODEL` | `base` | `small` / `medium` are more accurate; `large-v3` on GPU |
 | `MOM_WHISPER_DEVICE` | `cpu` | `cuda` if you have an NVIDIA GPU with CUDA libraries installed |
 | `MOM_WHISPER_LANGUAGE` | auto | e.g. `en`, `ur` |
+| `MOM_ORG_NAME` | empty | Municipality name printed at the top of the PDF |
+| `MOM_ROSTER_FILE` | `data/roster.json` | Known attendees, see above |
+| `MOM_SIGNATORIES` | empty | Signature lines, e.g. `Chair,Secretary`; empty = none |
 | `MOM_DELETE_AUDIO_AFTER` | `true` | Delete the recording after successful processing |
 
 The app deliberately ignores the `OLLAMA_HOST` environment variable and uses `MOM_OLLAMA_HOST`

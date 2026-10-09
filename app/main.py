@@ -15,6 +15,7 @@ from app.config import Settings
 from app.database.database import Database
 from app.documents.pdf_generator import generate_pdf
 from app.llm.ollama import OllamaClient, OllamaError
+from app.roster import Roster
 from app.schemas import MeetingMinutes
 from app.transcription.whisper import Transcriber
 
@@ -34,12 +35,16 @@ def create_app(settings: Settings | None = None, transcriber=None, agent=None, r
         app.state.settings = settings
         app.state.db = Database(settings.db_path)
         app.state.db.reset_stuck()
+        roster = Roster.load(settings.roster_file)
+        if roster:
+            log.info("Loaded %d people from roster %s", len(roster.people), settings.roster_file)
         app.state.transcriber = transcriber or Transcriber(
             settings.whisper_model, settings.whisper_device,
             settings.whisper_compute_type, settings.whisper_language,
+            names_hint=roster.whisper_prompt(),
         )
         app.state.llm = None if agent else OllamaClient(settings)
-        app.state.agent = agent or MeetingAgent(app.state.llm)
+        app.state.agent = agent or MeetingAgent(app.state.llm, roster=roster)
         app.state.preflight = _preflight
         app.state.executor = ThreadPoolExecutor(max_workers=1)  # one heavy job at a time
         try:
@@ -143,7 +148,8 @@ def create_app(settings: Settings | None = None, transcriber=None, agent=None, r
         if not m or not m["minutes"]:
             return JSONResponse({"error": "Minutes not available"}, status_code=404)
         minutes = MeetingMinutes.model_validate(m["minutes"])
-        out = generate_pdf(minutes, settings.output_dir / f"{meeting_id}.pdf", m["filename"])
+        out = generate_pdf(minutes, settings.output_dir / f"{meeting_id}.pdf", m["filename"],
+                           org_name=settings.org_name, signatories=settings.signatories)
         stem = Path(m["filename"]).stem or "meeting"
         return FileResponse(
             out, filename=f"Minutes - {stem}.pdf",

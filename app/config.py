@@ -58,6 +58,11 @@ class Settings:
     whisper_compute_type: str = "int8"
     whisper_language: str | None = None  # None = auto-detect
 
+    # Official-minutes settings
+    org_name: str = ""  # printed in the PDF letterhead, e.g. "RM of Springfield"
+    roster_file: Path = BASE_DIR / "data" / "roster.json"  # known councillors/staff
+    signatories: tuple = ()  # e.g. ("Chair", "Secretary"); none = no signature block
+
     max_upload_mb: int = 500
     delete_audio_after: bool = True
     allowed_extensions: tuple = (".mp3", ".wav", ".m4a", ".mp4", ".webm", ".ogg", ".flac")
@@ -95,6 +100,11 @@ class Settings:
             whisper_device=e("MOM_WHISPER_DEVICE", D["whisper_device"]),
             whisper_compute_type=e("MOM_WHISPER_COMPUTE_TYPE", D["whisper_compute_type"]),
             whisper_language=e("MOM_WHISPER_LANGUAGE") or None,
+            org_name=e("MOM_ORG_NAME", D["org_name"]).strip(),
+            roster_file=Path(e("MOM_ROSTER_FILE", D["roster_file"])),
+            signatories=tuple(t.strip() for t in
+                              e("MOM_SIGNATORIES", ",".join(D["signatories"])).split(",")
+                              if t.strip()),
             max_upload_mb=int(e("MOM_MAX_UPLOAD_MB", D["max_upload_mb"])),
             delete_audio_after=_bool(e("MOM_DELETE_AUDIO_AFTER", str(D["delete_audio_after"]))),
         )

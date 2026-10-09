@@ -59,13 +59,13 @@ def upload(client, name="m.mp3", data=b"x", date="2026-09-29"):
     )
 
 
-def test_full_flow_and_docx(client):
+def test_full_flow_and_pdf(client):
     r = upload(client)
     assert r.status_code == 200 and "Weekly Sync" in r.text  # redirect followed
     meeting_id = r.url.path.rsplit("/", 1)[-1]
     assert client.get(f"/meetings/{meeting_id}/status").json()["status"] == "done"
     doc = client.get(f"/meetings/{meeting_id}/download")
-    assert doc.status_code == 200 and doc.content[:2] == b"PK"  # valid zip/docx
+    assert doc.status_code == 200 and doc.content[:5] == b"%PDF-"
     assert not list(client.settings.upload_dir.iterdir())  # audio cleaned up
     assert "Weekly Sync" in client.get("/").text  # title appears on home dashboard
     assert client.post(f"/meetings/{meeting_id}/delete").status_code == 200

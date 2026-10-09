@@ -19,7 +19,7 @@ def test_full_flow(make_client, settings):
         assert "AI project sync" in page.text and "Build the agent" in page.text
 
         d = client.get(f"/meetings/{mid}/download")
-        assert d.status_code == 200 and d.content[:2] == b"PK"  # a real .docx (zip)
+        assert d.status_code == 200 and d.content[:5] == b"%PDF-"
 
         assert "AI project sync" in client.get("/").text
         # audio is deleted after success
