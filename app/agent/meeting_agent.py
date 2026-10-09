@@ -1,81 +1,152 @@
 import json
+import logging
+
+from pydantic import ValidationError
 
 from app.llm.ollama import OllamaClient
+from app.schemas import MeetingMinutes
 
+log = logging.getLogger("mom")
 
-class MeetingAgent:
+# Rough budget: ~4 chars per token. Leave room for prompt + JSON output.
+CHARS_PER_TOKEN = 4
 
-    def __init__(self):
-        self.llm = OllamaClient()
+PROMPT = """You are a professional meeting-minutes extraction agent.
 
-    def analyze(self, transcript: str) -> dict:
-
-        prompt = f"""
-You are a professional meeting-minutes extraction agent.
-
-Analyze the meeting transcript below and return ONLY valid JSON.
-
-Do not use Markdown.
-Do not add explanations before or after the JSON.
-
-Use exactly this structure:
-
-{{
-    "meeting_title": "",
-    "date": "",
-    "participants": [],
-    "summary": "",
-    "discussion_points": [],
-    "decisions": [],
-    "action_items": [
-        {{
-            "task": "",
-            "responsible_person": "",
-            "status": ""
-        }}
-    ],
-    "important_topics": [],
-    "next_steps": []
-}}
+Analyze the meeting transcript below and return ONLY valid JSON matching the schema.
 
 Rules:
-
 1. Only use information explicitly present in the transcript.
 2. Never invent participants, dates, decisions, or responsibilities.
 3. If information is unavailable, use an empty string or empty list.
-4. Keep the summary concise but informative.
-5. Extract concrete action items when they are mentioned.
-6. Use "Not specified" for an action item's responsible person if the task exists but no person is identified.
-7. Use "Not specified" for an action item's status if no status is given.
-
+4. Keep the summary concise but informative (3-6 sentences).
+5. Extract every concrete action item that is mentioned.
+6. Use "Not specified" for an action item's responsible_person or status if unknown.
+7. If a meeting date is not stated in the transcript, use: "{meeting_date}".
+{part_note}
 MEETING TRANSCRIPT:
 
 {transcript}
 """
 
-        response = self.llm.generate(prompt)
 
-        return self._parse_json(response)
+def chunk_text(text: str, max_chars: int) -> list[str]:
+    """Split on sentence-ish boundaries so each chunk is <= max_chars."""
+    text = text.strip()
+    if len(text) <= max_chars:
+        return [text]
+    chunks, current = [], ""
+    for sentence in text.replace("? ", "?\n").replace(". ", ".\n").replace("! ", "!\n").split("\n"):
+        while len(sentence) > max_chars:  # pathological: no punctuation at all
+            if current:
+                chunks.append(current.strip())
+                current = ""
+            chunks.append(sentence[:max_chars])
+            sentence = sentence[max_chars:]
+        if len(current) + len(sentence) + 1 > max_chars and current:
+            chunks.append(current.strip())
+            current = ""
+        current += sentence + " "
+    if current.strip():
+        chunks.append(current.strip())
+    return chunks
 
-    def _parse_json(self, response: str) -> dict:
 
-        response = response.strip()
+def _dedupe(items: list[str]) -> list[str]:
+    seen, out = set(), []
+    for item in items:
+        key = " ".join(item.lower().split())
+        if key and key not in seen:
+            seen.add(key)
+            out.append(item.strip())
+    return out
 
-        if response.startswith("```"):
-            lines = response.splitlines()
 
-            if lines and lines[0].startswith("```"):
-                lines = lines[1:]
+class MeetingAgent:
+    def __init__(self, llm: OllamaClient, max_retries: int = 2):
+        self.llm = llm
+        self.max_retries = max_retries
 
-            if lines and lines[-1].strip() == "```":
+    @property
+    def max_chunk_chars(self) -> int:
+        ctx = self.llm.settings.ollama_num_ctx
+        return max(2000, int((ctx - 1500) * CHARS_PER_TOKEN * 0.6))
+
+    def analyze(self, transcript: str, meeting_date: str = "") -> MeetingMinutes:
+        if not transcript.strip():
+            raise ValueError("The transcript is empty - no speech was detected in the recording.")
+        chunks = chunk_text(transcript, self.max_chunk_chars)
+        log.info("Analyzing transcript in %d chunk(s)", len(chunks))
+        parts = [self._extract(c, meeting_date, i + 1, len(chunks)) for i, c in enumerate(chunks)]
+        return parts[0] if len(parts) == 1 else self._merge(parts)
+
+    # ------------------------------------------------------------------
+    def _extract(self, chunk: str, meeting_date: str, idx: int, total: int) -> MeetingMinutes:
+        note = ""
+        if total > 1:
+            note = f"\nThis is part {idx} of {total} of a longer meeting. Extract only what is in this part.\n"
+        prompt = PROMPT.format(meeting_date=meeting_date, part_note=note, transcript=chunk)
+        schema = MeetingMinutes.model_json_schema()
+        last_error: Exception | None = None
+        for attempt in range(self.max_retries + 1):
+            raw = self.llm.generate(prompt, schema=schema)
+            try:
+                return self._parse(raw)
+            except (ValueError, ValidationError) as e:
+                last_error = e
+                log.warning("Bad model output (attempt %d): %s", attempt + 1, e)
+        raise ValueError(f"The model did not return valid minutes after retries: {last_error}")
+
+    @staticmethod
+    def _parse(raw: str) -> MeetingMinutes:
+        raw = raw.strip()
+        if raw.startswith("```"):
+            lines = raw.splitlines()[1:]
+            if lines and lines[-1].strip().startswith("```"):
                 lines = lines[:-1]
+            raw = "\n".join(lines).strip()
+        if not raw.startswith("{"):  # tolerate chatter around the JSON
+            start, end = raw.find("{"), raw.rfind("}")
+            if start == -1 or end == -1:
+                raise ValueError("no JSON object found")
+            raw = raw[start:end + 1]
+        data = json.loads(raw)
+        for item in data.get("action_items", []) or []:
+            if isinstance(item, dict):
+                for k in ("responsible_person", "status"):
+                    if not item.get(k):
+                        item[k] = "Not specified"
+        return MeetingMinutes.model_validate(data)
 
-            response = "\n".join(lines).strip()
+    def _merge(self, parts: list[MeetingMinutes]) -> MeetingMinutes:
+        merged = MeetingMinutes()
+        merged.meeting_title = next((p.meeting_title for p in parts if p.meeting_title), "")
+        merged.date = next((p.date for p in parts if p.date), "")
+        merged.participants = _dedupe([x for p in parts for x in p.participants])
+        merged.discussion_points = _dedupe([x for p in parts for x in p.discussion_points])
+        merged.decisions = _dedupe([x for p in parts for x in p.decisions])
+        merged.important_topics = _dedupe([x for p in parts for x in p.important_topics])
+        merged.next_steps = _dedupe([x for p in parts for x in p.next_steps])
+        seen = set()
+        for p in parts:
+            for a in p.action_items:
+                key = (" ".join(a.task.lower().split()), a.responsible_person.lower())
+                if a.task and key not in seen:
+                    seen.add(key)
+                    merged.action_items.append(a)
+        summaries = [p.summary for p in parts if p.summary]
+        merged.summary = self._consolidate_summary(summaries)
+        return merged
 
+    def _consolidate_summary(self, summaries: list[str]) -> str:
+        joined = "\n".join(f"- {s}" for s in summaries)
+        prompt = (
+            "Combine these partial summaries of one meeting into a single concise summary "
+            "(3-6 sentences). Use only the information given. Reply with the summary text only.\n\n"
+            + joined
+        )
         try:
-            return json.loads(response)
-
-        except json.JSONDecodeError as error:
-            raise ValueError(
-                f"Ollama returned invalid JSON:\n{response}"
-            ) from error
+            return self.llm.generate(prompt).strip()
+        except Exception:  # summary is nice-to-have; never fail the job over it
+            log.exception("Summary consolidation failed; falling back to concatenation")
+            return " ".join(summaries)

@@ -1,0 +1,81 @@
+"""Central settings. Everything can be overridden with MOM_* environment
+variables or a .env file in the project root.
+
+NOTE: the standard OLLAMA_HOST variable is deliberately NOT used. A value of
+0.0.0.0 (valid for the server) breaks Python clients on Windows.
+"""
+import os
+from dataclasses import dataclass
+from pathlib import Path
+from urllib.parse import urlparse
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def _load_dotenv() -> None:
+    env = BASE_DIR / ".env"
+    if not env.exists():
+        return
+    for line in env.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip().strip("'\""))
+
+
+def normalize_host(host: str) -> str:
+    """Turn '0.0.0.0:11434', 'localhost', '::' etc. into a connectable URL."""
+    host = (host or "").strip()
+    if "://" not in host:
+        host = "http://" + host
+    u = urlparse(host)
+    name = u.hostname
+    if name in (None, "", "0.0.0.0", "::", "localhost"):
+        name = "127.0.0.1"
+    return f"{u.scheme}://{name}:{u.port or 11434}"
+
+
+def _bool(value: str) -> bool:
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+@dataclass
+class Settings:
+    base_dir: Path = BASE_DIR
+    upload_dir: Path = BASE_DIR / "uploads"
+    output_dir: Path = BASE_DIR / "outputs"
+    db_path: Path = BASE_DIR / "data" / "meetings.db"
+
+    ollama_host: str = "http://127.0.0.1:11434"
+    ollama_model: str = "gemma2:2b"
+    ollama_num_ctx: int = 8192
+    ollama_timeout: int = 600
+
+    whisper_model: str = "base"
+    whisper_device: str = "cpu"
+    whisper_compute_type: str = "int8"
+    whisper_language: str | None = None  # None = auto-detect
+
+    max_upload_mb: int = 500
+    delete_audio_after: bool = True
+    allowed_extensions: tuple = (".mp3", ".wav", ".m4a", ".mp4", ".webm", ".ogg", ".flac")
+
+    @classmethod
+    def load(cls) -> "Settings":
+        _load_dotenv()
+        e = os.environ.get
+        s = cls()
+        s.ollama_host = normalize_host(e("MOM_OLLAMA_HOST", s.ollama_host))
+        s.ollama_model = e("MOM_OLLAMA_MODEL", s.ollama_model)
+        s.ollama_num_ctx = int(e("MOM_OLLAMA_NUM_CTX", s.ollama_num_ctx))
+        s.ollama_timeout = int(e("MOM_OLLAMA_TIMEOUT", s.ollama_timeout))
+        s.whisper_model = e("MOM_WHISPER_MODEL", s.whisper_model)
+        s.whisper_device = e("MOM_WHISPER_DEVICE", s.whisper_device)
+        s.whisper_compute_type = e("MOM_WHISPER_COMPUTE_TYPE", s.whisper_compute_type)
+        s.whisper_language = e("MOM_WHISPER_LANGUAGE") or None
+        s.max_upload_mb = int(e("MOM_MAX_UPLOAD_MB", s.max_upload_mb))
+        s.delete_audio_after = _bool(e("MOM_DELETE_AUDIO_AFTER", str(s.delete_audio_after)))
+        for d in (s.upload_dir, s.output_dir, s.db_path.parent):
+            d.mkdir(parents=True, exist_ok=True)
+        return s

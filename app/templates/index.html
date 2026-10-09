@@ -1,22 +1,25 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Local Meeting AI Agent</title>
-</head>
-
-<body>
-
-    <h1>Local Meeting AI Agent</h1>
-
-    <p>
-        Turn your meeting recordings into professional meeting minutes.
-    </p>
-
-    <a href="/upload">
-        Upload Meeting
-    </a>
-
-</body>
-</html>
+{% extends "base.html" %}
+{% block content %}
+<h1>Dashboard</h1>
+{% if error %}<p class="alert error">{{ error }}</p>{% endif %}
+{% if meetings %}
+<table class="list">
+  <thead><tr><th>Meeting</th><th>Date</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+  {% for m in meetings %}
+    <tr>
+      <td><a href="/meetings/{{ m.id }}">{{ m.title }}</a></td>
+      <td>{{ m.meeting_date }}</td>
+      <td><span class="badge {{ m.status }}">{{ m.status }}</span></td>
+      <td class="right"><a href="/meetings/{{ m.id }}">Open</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty">
+  <p>No meetings yet.</p>
+  <a class="btn" href="/upload">Upload your first recording</a>
+</div>
+{% endif %}
+{% endblock %}

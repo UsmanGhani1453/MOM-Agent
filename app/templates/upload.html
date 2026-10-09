@@ -1,78 +1,16 @@
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>Upload Meeting</title>
-</head>
-
-<body>
-
-    <h1>Upload Meeting</h1>
-
-    {% if error %}
-
-        <p style="color: red;">
-            {{ error }}
-        </p>
-
-    {% endif %}
-
-
-    {% if success %}
-
-        <p style="color: green;">
-            {{ success }}
-        </p>
-
-    {% endif %}
-
-
-    <form
-        action="/upload"
-        method="post"
-        enctype="multipart/form-data"
-    >
-
-        <input
-            type="file"
-            name="file"
-            accept=".mp3,.wav,.m4a,.mp4"
-            required
-        >
-
-        <br><br>
-
-        <button type="submit">
-            Upload Meeting
-        </button>
-
-    </form>
-
-
-    {% if transcript %}
-
-        <hr>
-
-        <h2>Meeting Transcript</h2>
-
-        <textarea
-            rows="25"
-            style="width: 100%;"
-            readonly
-        >{{ transcript }}</textarea>
-
-    {% endif %}
-
-
-    <br>
-
-    <a href="/">
-        Back to Dashboard
-    </a>
-
-</body>
-
-</html>
+{% extends "base.html" %}
+{% block title %}Upload meeting{% endblock %}
+{% block content %}
+<h1>Upload meeting</h1>
+{% if error %}<p class="alert error">{{ error }}</p>{% endif %}
+<form class="card" action="/upload" method="post" enctype="multipart/form-data" id="upload-form">
+  <label>Recording <small>(mp3, wav, m4a, mp4, webm, ogg, flac - up to {{ max_mb }} MB)</small>
+    <input type="file" name="file" accept=".mp3,.wav,.m4a,.mp4,.webm,.ogg,.flac" required>
+  </label>
+  <label>Meeting date
+    <input type="date" name="meeting_date" value="{{ today }}">
+  </label>
+  <button class="btn" type="submit">Upload &amp; generate minutes</button>
+  <p class="muted" id="upload-note" hidden>Uploading... large files can take a moment.</p>
+</form>
+{% endblock %}

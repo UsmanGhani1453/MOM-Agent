@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}{{ (m.minutes.meeting_title if m.minutes else m.filename) }}{% endblock %}
+{% block content %}
+<div id="job" data-id="{{ m.id }}" data-status="{{ m.status }}"></div>
+
+{% if m.status in ("queued", "processing") %}
+  <h1>{{ m.filename }}</h1>
+  <div class="card center">
+    <div class="spinner"></div>
+    <p class="stage" id="stage">{{ m.stage or "Queued" }}...</p>
+    <p class="muted">This page updates automatically. Long recordings can take several minutes.</p>
+  </div>
+
+{% elif m.status == "failed" %}
+  <h1>{{ m.filename }}</h1>
+  <p class="alert error"><strong>Processing failed:</strong> {{ m.error }}</p>
+  <div class="row">
+    <form method="post" action="/meetings/{{ m.id }}/retry"><button class="btn">Retry</button></form>
+    <form method="post" action="/meetings/{{ m.id }}/delete"
+          onsubmit="return confirm('Delete this meeting?')"><button class="btn danger">Delete</button></form>
+  </div>
+  {% if m.transcript %}<p class="muted">The transcript was saved, so Retry skips transcription.</p>{% endif %}
+
+{% else %}
+  {% set x = m.minutes %}
+  <div class="row between">
+    <div>
+      <h1>{{ x.meeting_title or m.filename }}</h1>
+      <p class="muted">{{ x.date or m.meeting_date }} &middot; {{ m.filename }}</p>
+    </div>
+    <div class="row">
+      <a class="btn" href="/meetings/{{ m.id }}/download">Download .docx</a>
+      <form method="post" action="/meetings/{{ m.id }}/delete"
+            onsubmit="return confirm('Delete this meeting?')"><button class="btn danger">Delete</button></form>
+    </div>
+  </div>
+
+  <section class="card"><h2>Summary</h2><p>{{ x.summary or "No summary available." }}</p></section>
+
+  <div class="grid">
+    <section class="card"><h2>Participants</h2>
+      {% if x.participants %}<ul>{% for i in x.participants %}<li>{{ i }}</li>{% endfor %}</ul>{% else %}<p class="muted">None recorded.</p>{% endif %}
+    </section>
+    <section class="card"><h2>Decisions</h2>
+      {% if x.decisions %}<ul>{% for i in x.decisions %}<li>{{ i }}</li>{% endfor %}</ul>{% else %}<p class="muted">None recorded.</p>{% endif %}
+    </section>
+  </div>
+
+  <section class="card"><h2>Discussion points</h2>
+    {% if x.discussion_points %}<ul>{% for i in x.discussion_points %}<li>{{ i }}</li>{% endfor %}</ul>{% else %}<p class="muted">None recorded.</p>{% endif %}
+  </section>
+
+  <section class="card"><h2>Action items</h2>
+    {% if x.action_items %}
+    <table class="list"><thead><tr><th>Task</th><th>Responsible</th><th>Status</th></tr></thead><tbody>
+      {% for a in x.action_items %}<tr><td>{{ a.task }}</td><td>{{ a.responsible_person }}</td><td>{{ a.status }}</td></tr>{% endfor %}
+    </tbody></table>
+    {% else %}<p class="muted">None recorded.</p>{% endif %}
+  </section>
+
+  <div class="grid">
+    <section class="card"><h2>Important topics</h2>
+      {% if x.important_topics %}<ul>{% for i in x.important_topics %}<li>{{ i }}</li>{% endfor %}</ul>{% else %}<p class="muted">None recorded.</p>{% endif %}
+    </section>
+    <section class="card"><h2>Next steps</h2>
+      {% if x.next_steps %}<ul>{% for i in x.next_steps %}<li>{{ i }}</li>{% endfor %}</ul>{% else %}<p class="muted">None recorded.</p>{% endif %}
+    </section>
+  </div>
+
+  <details class="card"><summary>Full transcript</summary>
+    <p class="transcript">{{ m.transcript }}</p>
+  </details>
+{% endif %}
+{% endblock %}
