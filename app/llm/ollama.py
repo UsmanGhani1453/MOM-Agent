@@ -38,9 +38,15 @@ class OllamaClient:
             response = self.client.chat(
                 model=self.settings.ollama_model,
                 messages=[{"role": "user", "content": prompt}],
-                format=schema,
+                format="json" if schema else None,
                 options={"num_ctx": self.settings.ollama_num_ctx, "temperature": 0},
             )
-        except ConnectionError as e:
-            raise OllamaError(f"Lost connection to Ollama at {self.settings.ollama_host}.") from e
+        except OllamaError:
+            raise
+        except Exception as e:
+            # The SDK raises httpx.ConnectError, httpx.TimeoutException, etc.
+            # Wrap everything into OllamaError so callers get a consistent, friendly message.
+            raise OllamaError(
+                f"Ollama request failed ({type(e).__name__}): {e}"
+            ) from e
         return response.message.content

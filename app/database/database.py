@@ -49,7 +49,7 @@ class Database:
             c.execute(f"UPDATE meetings SET {cols} WHERE id=?", (*fields.values(), meeting_id))
 
     def get(self, meeting_id: str) -> dict | None:
-        with self._conn() as c:
+        with self._lock, self._conn() as c:
             row = c.execute("SELECT * FROM meetings WHERE id=?", (meeting_id,)).fetchone()
         if not row:
             return None
@@ -58,7 +58,7 @@ class Database:
         return d
 
     def list(self) -> list[dict]:
-        with self._conn() as c:
+        with self._lock, self._conn() as c:
             rows = c.execute(
                 "SELECT id, filename, meeting_date, status, stage, created_at, minutes_json "
                 "FROM meetings ORDER BY created_at DESC"

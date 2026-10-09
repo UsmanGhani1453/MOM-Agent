@@ -36,11 +36,12 @@ def test_rejects_bad_extension(make_client):
 
 
 def test_rejects_oversize(make_client, settings):
-    settings.max_upload_mb = 1
-    with make_client()[0] as client:
+    import dataclasses
+    tiny_settings = dataclasses.replace(settings, max_upload_mb=1)
+    with make_client(settings_override=tiny_settings)[0] as client:
         r = upload(client, data=b"x" * (2 * 1024 * 1024))
         assert r.status_code == 413
-        assert not list(settings.upload_dir.iterdir())
+        assert not list(tiny_settings.upload_dir.iterdir())
 
 
 def test_failure_then_retry_reuses_transcript(make_client):

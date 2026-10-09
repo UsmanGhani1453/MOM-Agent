@@ -37,9 +37,10 @@ def test_empty_transcript_rejected(settings):
 
 
 def test_chunking_and_merge(settings):
-    settings.ollama_num_ctx = 2048  # force tiny chunks
+    import dataclasses
+    tiny_settings = dataclasses.replace(settings, ollama_num_ctx=2048)  # force tiny chunks
     long = "Usman will build the agent. " * 600
-    agent = MeetingAgent(FakeLLM(settings, [json.dumps(GOOD)]))
+    agent = MeetingAgent(FakeLLM(tiny_settings, [json.dumps(GOOD)]))
     chunks = chunk_text(long, agent.max_chunk_chars)
     assert len(chunks) > 1 and all(len(c) <= agent.max_chunk_chars for c in chunks)
     m = agent.analyze(long)

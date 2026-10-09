@@ -12,6 +12,15 @@ def test_full_pipeline():
     from app.agent.meeting_agent import MeetingAgent
     from app.transcription.whisper import Transcriber
 
-    transcript = Transcriber().transcribe(str(AUDIO))
+    from app.config import Settings
+    from app.llm.ollama import OllamaClient
+
+    settings = Settings.load()
+    transcript = Transcriber(
+        settings.whisper_model,
+        settings.whisper_device,
+        settings.whisper_compute_type,
+        settings.whisper_language,
+    ).transcribe(str(AUDIO))
     assert transcript
-    assert MeetingAgent().analyze(transcript)["summary"]
+    assert MeetingAgent(OllamaClient(settings)).analyze(transcript).summary

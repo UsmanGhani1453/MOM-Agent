@@ -51,20 +51,27 @@ class FakeTranscriber:
 
 @pytest.fixture
 def settings(tmp_path):
-    s = Settings()
-    s.upload_dir, s.output_dir = tmp_path / "up", tmp_path / "out"
-    s.db_path = tmp_path / "db" / "m.db"
-    for d in (s.upload_dir, s.output_dir, s.db_path.parent):
+    upload_dir = tmp_path / "up"
+    output_dir = tmp_path / "out"
+    db_path = tmp_path / "db" / "m.db"
+    for d in (upload_dir, output_dir, db_path.parent):
         d.mkdir(parents=True)
-    return s
+    import dataclasses
+    return dataclasses.replace(
+        Settings(),
+        upload_dir=upload_dir,
+        output_dir=output_dir,
+        db_path=db_path,
+    )
 
 
 @pytest.fixture
 def make_client(settings):
-    def _make(outputs=None, transcriber=None):
-        llm = FakeLLM(settings, outputs)
+    def _make(outputs=None, transcriber=None, settings_override=None):
+        s = settings_override or settings
+        llm = FakeLLM(s, outputs)
         tr = transcriber or FakeTranscriber()
-        app = create_app(settings, transcriber=tr, agent=MeetingAgent(llm, max_retries=2))
+        app = create_app(s, transcriber=tr, agent=MeetingAgent(llm, max_retries=2))
         return TestClient(app), llm, tr
     return _make
 

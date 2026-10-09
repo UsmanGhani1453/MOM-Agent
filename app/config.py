@@ -4,6 +4,7 @@ variables or a .env file in the project root.
 NOTE: the standard OLLAMA_HOST variable is deliberately NOT used. A value of
 0.0.0.0 (valid for the server) breaks Python clients on Windows.
 """
+import dataclasses
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -40,7 +41,7 @@ def _bool(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
-@dataclass
+@dataclass(frozen=True)
 class Settings:
     base_dir: Path = BASE_DIR
     upload_dir: Path = BASE_DIR / "uploads"
@@ -63,19 +64,38 @@ class Settings:
 
     @classmethod
     def load(cls) -> "Settings":
+        """Read env / .env overrides and return an immutable Settings instance.
+
+        Field defaults are read from the dataclass definition via dataclasses.fields()
+        so the env-var fallback values are always in sync with the class defaults.
+        """
         _load_dotenv()
         e = os.environ.get
-        s = cls()
-        s.ollama_host = normalize_host(e("MOM_OLLAMA_HOST", s.ollama_host))
-        s.ollama_model = e("MOM_OLLAMA_MODEL", s.ollama_model)
-        s.ollama_num_ctx = int(e("MOM_OLLAMA_NUM_CTX", s.ollama_num_ctx))
-        s.ollama_timeout = int(e("MOM_OLLAMA_TIMEOUT", s.ollama_timeout))
-        s.whisper_model = e("MOM_WHISPER_MODEL", s.whisper_model)
-        s.whisper_device = e("MOM_WHISPER_DEVICE", s.whisper_device)
-        s.whisper_compute_type = e("MOM_WHISPER_COMPUTE_TYPE", s.whisper_compute_type)
-        s.whisper_language = e("MOM_WHISPER_LANGUAGE") or None
-        s.max_upload_mb = int(e("MOM_MAX_UPLOAD_MB", s.max_upload_mb))
-        s.delete_audio_after = _bool(e("MOM_DELETE_AUDIO_AFTER", str(s.delete_audio_after)))
-        for d in (s.upload_dir, s.output_dir, s.db_path.parent):
+        # Build a lookup of field-name -> default so we never repeat the default values.
+        D = {f.name: f.default for f in dataclasses.fields(cls)}
+
+        # Resolve path overrides before mkdir so custom directories are created.
+        upload_dir = Path(e("MOM_UPLOAD_DIR", D["upload_dir"]))
+        output_dir = Path(e("MOM_OUTPUT_DIR", D["output_dir"]))
+        db_path = Path(e("MOM_DB_PATH", D["db_path"]))
+
+        # Ensure directories exist before the immutable instance is created.
+        for d in (upload_dir, output_dir, db_path.parent):
             d.mkdir(parents=True, exist_ok=True)
-        return s
+
+        return cls(
+            upload_dir=upload_dir,
+            output_dir=output_dir,
+            db_path=db_path,
+            ollama_host=normalize_host(e("MOM_OLLAMA_HOST", D["ollama_host"])),
+            ollama_model=e("MOM_OLLAMA_MODEL", D["ollama_model"]),
+            ollama_num_ctx=int(e("MOM_OLLAMA_NUM_CTX", D["ollama_num_ctx"])),
+            ollama_timeout=int(e("MOM_OLLAMA_TIMEOUT", D["ollama_timeout"])),
+            whisper_model=e("MOM_WHISPER_MODEL", D["whisper_model"]),
+            whisper_device=e("MOM_WHISPER_DEVICE", D["whisper_device"]),
+            whisper_compute_type=e("MOM_WHISPER_COMPUTE_TYPE", D["whisper_compute_type"]),
+            whisper_language=e("MOM_WHISPER_LANGUAGE") or None,
+            max_upload_mb=int(e("MOM_MAX_UPLOAD_MB", D["max_upload_mb"])),
+            delete_audio_after=_bool(e("MOM_DELETE_AUDIO_AFTER", str(D["delete_audio_after"]))),
+        )
+

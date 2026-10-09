@@ -23,6 +23,26 @@ Rules:
 5. Extract every concrete action item that is mentioned.
 6. Use "Not specified" for an action item's responsible_person or status if unknown.
 7. If a meeting date is not stated in the transcript, use: "{meeting_date}".
+
+EXPECTED JSON SCHEMA:
+{{
+  "meeting_title": "string",
+  "date": "string",
+  "participants": ["string"],
+  "summary": "string",
+  "discussion_points": ["string"],
+  "decisions": ["string"],
+  "action_items": [
+    {{
+      "task": "string",
+      "responsible_person": "string",
+      "status": "string"
+    }}
+  ],
+  "important_topics": ["string"],
+  "next_steps": ["string"]
+}}
+
 {part_note}
 MEETING TRANSCRIPT:
 
@@ -37,6 +57,8 @@ def chunk_text(text: str, max_chars: int) -> list[str]:
         return [text]
     chunks, current = [], ""
     for sentence in text.replace("? ", "?\n").replace(". ", ".\n").replace("! ", "!\n").split("\n"):
+        if not sentence.strip():  # skip blank lines produced by double spaces / trailing punctuation
+            continue
         while len(sentence) > max_chars:  # pathological: no punctuation at all
             if current:
                 chunks.append(current.strip())
@@ -58,7 +80,12 @@ def _dedupe(items: list[str]) -> list[str]:
         key = " ".join(item.lower().split())
         if key and key not in seen:
             seen.add(key)
-            out.append(item.strip())
+            value = item.strip()
+            # Normalise ALL-CAPS items to Title Case so "ALICE JOHNSON" from one
+            # chunk and "Alice Johnson" from another don't both appear in output.
+            if value == value.upper() and any(c.isalpha() for c in value):
+                value = value.title()
+            out.append(value)
     return out
 
 
@@ -70,7 +97,10 @@ class MeetingAgent:
     @property
     def max_chunk_chars(self) -> int:
         ctx = self.llm.settings.ollama_num_ctx
-        return max(2000, int((ctx - 1500) * CHARS_PER_TOKEN * 0.6))
+        # Reserve ~1500 tokens for the system prompt + JSON schema overhead,
+        # then use 60% of the remaining budget as chars (4 chars/token) to leave
+        # headroom for the model's JSON output within the same context window.
+        return max(2000, int((ctx - 1500) * CHARS_PER_TOKEN * 0.4))
 
     def analyze(self, transcript: str, meeting_date: str = "") -> MeetingMinutes:
         if not transcript.strip():

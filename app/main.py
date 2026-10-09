@@ -13,7 +13,7 @@ from fastapi.templating import Jinja2Templates
 from app.agent.meeting_agent import MeetingAgent
 from app.config import Settings
 from app.database.database import Database
-from app.documents.docx_generator import generate_docx
+from app.documents.pdf_generator import generate_pdf
 from app.llm.ollama import OllamaClient, OllamaError
 from app.schemas import MeetingMinutes
 from app.transcription.whisper import Transcriber
@@ -25,7 +25,7 @@ APP_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
 
 
-def create_app(settings: Settings | None = None, transcriber=None, agent=None) -> FastAPI:
+def create_app(settings: Settings | None = None, transcriber=None, agent=None, run_inline: bool = False) -> FastAPI:
     """App factory. `transcriber` / `agent` can be injected (used by the tests)."""
     settings = settings or Settings.load()
 
@@ -43,7 +43,7 @@ def create_app(settings: Settings | None = None, transcriber=None, agent=None) -
         app.state.preflight = _preflight
         app.state.executor = ThreadPoolExecutor(max_workers=1)  # one heavy job at a time
         try:
-            _preflight(app)
+            await _run_blocking(_preflight, app)
             log.info("Ollama OK (model %s)", settings.ollama_model)
         except OllamaError as e:
             log.warning("Ollama preflight failed: %s", e)
@@ -89,19 +89,37 @@ def create_app(settings: Settings | None = None, transcriber=None, agent=None) -
         meeting_id = uuid.uuid4().hex
         path = settings.upload_dir / f"{meeting_id}{ext}"
         limit = settings.max_upload_mb * 1024 * 1024
-        size = 0
-        with open(path, "wb") as buf:
-            while chunk := await file.read(1024 * 1024):
-                size += len(chunk)
-                if size > limit:
-                    buf.close()
-                    path.unlink(missing_ok=True)
-                    return fail(f"File is larger than {settings.max_upload_mb} MB.", 413)
-                buf.write(chunk)
 
+        # Fast-fail if the client declares a size that already exceeds the limit,
+        # before we create a DB row or write a single byte to disk.
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > limit:
+            return fail(f"File is larger than {settings.max_upload_mb} MB.", 413)
+
+        # Create the DB record BEFORE touching disk so a mid-write crash leaves
+        # a 'queued' row that reset_stuck() will mark failed on next startup,
+        # rather than an orphaned file with no DB reference.
         request.app.state.db.create(meeting_id, name, meeting_date or date.today().isoformat(),
                                     str(path))
-        request.app.state.executor.submit(process, request.app, meeting_id)
+        size = 0
+        try:
+            with open(path, "wb") as buf:
+                while chunk := await file.read(1024 * 1024):
+                    size += len(chunk)
+                    if size > limit:
+                        path.unlink(missing_ok=True)
+                        request.app.state.db.delete(meeting_id)
+                        return fail(f"File is larger than {settings.max_upload_mb} MB.", 413)
+                    buf.write(chunk)
+        except Exception:
+            path.unlink(missing_ok=True)
+            request.app.state.db.delete(meeting_id)
+            raise
+
+        if run_inline:
+            process(request.app, meeting_id)
+        else:
+            request.app.state.executor.submit(process, request.app, meeting_id)
         return RedirectResponse(f"/meetings/{meeting_id}", status_code=303)
 
     @app.get("/meetings/{meeting_id}")
@@ -125,11 +143,11 @@ def create_app(settings: Settings | None = None, transcriber=None, agent=None) -
         if not m or not m["minutes"]:
             return JSONResponse({"error": "Minutes not available"}, status_code=404)
         minutes = MeetingMinutes.model_validate(m["minutes"])
-        out = generate_docx(minutes, settings.output_dir / f"{meeting_id}.docx", m["filename"])
+        out = generate_pdf(minutes, settings.output_dir / f"{meeting_id}.pdf", m["filename"])
         stem = Path(m["filename"]).stem or "meeting"
         return FileResponse(
-            out, filename=f"Minutes - {stem}.docx",
-            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            out, filename=f"Minutes - {stem}.pdf",
+            media_type="application/pdf",
         )
 
     @app.post("/meetings/{meeting_id}/retry")
@@ -138,7 +156,10 @@ def create_app(settings: Settings | None = None, transcriber=None, agent=None) -
         m = db.get(meeting_id)
         if m and m["status"] == "failed":
             db.update(meeting_id, status="queued", stage="Queued", error="")
-            request.app.state.executor.submit(process, request.app, meeting_id)
+            if run_inline:
+                process(request.app, meeting_id)
+            else:
+                request.app.state.executor.submit(process, request.app, meeting_id)
         return RedirectResponse(f"/meetings/{meeting_id}", status_code=303)
 
     @app.post("/meetings/{meeting_id}/delete")
@@ -148,7 +169,7 @@ def create_app(settings: Settings | None = None, transcriber=None, agent=None) -
         if m:
             if m["audio_path"]:
                 Path(m["audio_path"]).unlink(missing_ok=True)
-            (settings.output_dir / f"{meeting_id}.docx").unlink(missing_ok=True)
+            (settings.output_dir / f"{meeting_id}.pdf").unlink(missing_ok=True)
             db.delete(meeting_id)
         return RedirectResponse("/", status_code=303)
 
@@ -182,6 +203,11 @@ def process(app: FastAPI, meeting_id: str) -> None:
             transcript = app.state.transcriber.transcribe(m["audio_path"])
             db.update(meeting_id, transcript=transcript)  # saved so a retry skips this step
 
+        if not transcript.strip():
+            raise ValueError(
+                "The transcript is empty - no speech was detected in the recording."
+            )
+
         db.update(meeting_id, stage=f"Analyzing with {settings.ollama_model}")
         minutes = app.state.agent.analyze(transcript, m["meeting_date"])
         if not minutes.date:
@@ -194,5 +220,3 @@ def process(app: FastAPI, meeting_id: str) -> None:
         log.exception("Job %s failed", meeting_id)
         db.update(meeting_id, status="failed", stage="Failed", error=str(e))
 
-
-app = create_app()

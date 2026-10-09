@@ -29,7 +29,7 @@
       <p class="muted">{{ x.date or m.meeting_date }} &middot; {{ m.filename }}</p>
     </div>
     <div class="row">
-      <a class="btn" href="/meetings/{{ m.id }}/download">Download .docx</a>
+      <a class="btn" href="/meetings/{{ m.id }}/download">Download .pdf</a>
       <form method="post" action="/meetings/{{ m.id }}/delete"
             onsubmit="return confirm('Delete this meeting?')"><button class="btn danger">Delete</button></form>
     </div>

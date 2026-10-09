@@ -2,10 +2,10 @@
 
 Upload a meeting recording. It is transcribed locally (faster-whisper), analysed locally
 (Ollama), and turned into structured minutes you can read in the browser or download as a
-Word file. Nothing leaves your machine.
+PDF file. Nothing leaves your machine.
 
 ```
-audio -> faster-whisper -> transcript -> Ollama (JSON schema) -> minutes -> web page + .docx
+audio -> faster-whisper -> transcript -> Ollama (JSON schema) -> minutes -> web page + .pdf
 ```
 
 ## Setup (Windows PowerShell)
@@ -29,7 +29,7 @@ macOS/Linux: same steps, `source venv/bin/activate`, then `python scripts/check_
 1. **New meeting**: choose a recording and the meeting date.
 2. The page shows progress (transcribing, analysing) and updates itself.
 3. When done you get summary, participants, decisions, action items, topics, next steps, the full
-   transcript, and **Download .docx**.
+   transcript, and **Download .pdf**.
 4. If a step fails you see the reason and a **Retry** button. The transcript is saved, so a retry
    after an Ollama problem does not re-transcribe.
 
@@ -66,7 +66,7 @@ python scripts/pipeline_test.py a.mp3   # run the real pipeline from the command
 ```
 
 Layout: `app/main.py` (routes + background job), `app/agent` (prompting, chunking, retries, merge),
-`app/llm` (Ollama client), `app/transcription`, `app/documents` (docx), `app/database` (SQLite).
+`app/llm` (Ollama client), `app/transcription`, `app/documents` (pdf), `app/database` (SQLite).
 
 Security notes: the server binds to localhost and has no authentication. Do not expose it to a
 network without adding auth. Uploads are stored under random names and size-limited.

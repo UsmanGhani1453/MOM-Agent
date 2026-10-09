@@ -1,7 +1,10 @@
-from app.agent.meeting_agent import MeetingAgent
+"""Manual integration test: requires a running Ollama instance with the configured model.
 
+Run with: pytest -m integration
+"""
+import pytest
 
-transcript = """
+TRANSCRIPT = """
 The project team met on September 29, 2026.
 
 Participants were Usman, Ali, and Sarah.
@@ -18,13 +21,24 @@ The team will test the complete system next week.
 """
 
 
-agent = MeetingAgent()
+@pytest.mark.integration
+def test_meeting_agent_live():
+    """End-to-end agent test against a live Ollama instance."""
+    from app.agent.meeting_agent import MeetingAgent
+    from app.config import Settings
+    from app.llm.ollama import OllamaClient
 
-result = agent.analyze(transcript)
+    settings = Settings.load()
+    llm = OllamaClient(settings)
+    agent = MeetingAgent(llm)
 
-print("\n--- MEETING ANALYSIS ---\n")
+    result = agent.analyze(TRANSCRIPT)
 
-for key, value in result.items():
-    print(f"{key}:")
-    print(value)
-    print()
+    print("\n--- MEETING ANALYSIS ---\n")
+    for key, value in result.model_dump().items():
+        print(f"{key}:")
+        print(value)
+        print()
+
+    assert result.summary, "Expected a non-empty summary"
+    assert result.participants, "Expected participants to be extracted"
