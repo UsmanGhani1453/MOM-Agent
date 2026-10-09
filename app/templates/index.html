@@ -1,24 +1,43 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Dashboard</h1>
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px;">
+  <h1 style="margin: 0;">Dashboard</h1>
+  <a class="btn" href="/upload">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+    </svg>
+    New Meeting
+  </a>
+</div>
+
 {% if error %}<p class="alert error">{{ error }}</p>{% endif %}
+
 {% if meetings %}
-<table class="list">
-  <thead><tr><th>Meeting</th><th>Date</th><th>Status</th><th></th></tr></thead>
-  <tbody>
-  {% for m in meetings %}
-    <tr>
-      <td><a href="/meetings/{{ m.id }}">{{ m.title }}</a></td>
-      <td>{{ m.meeting_date }}</td>
-      <td><span class="badge {{ m.status }}">{{ m.status }}</span></td>
-      <td class="right"><a href="/meetings/{{ m.id }}">Open</a></td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<div class="table-container">
+  <table>
+    <thead><tr><th>Meeting Title</th><th>Date</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for m in meetings %}
+      <tr>
+        <td style="font-weight: 500;">{{ m.title }}</td>
+        <td style="color: var(--text-muted);">{{ m.meeting_date }}</td>
+        <td><span class="badge {{ m.status }}">{{ m.status }}</span></td>
+        <td style="text-align: right;">
+          <a class="btn" style="padding: 6px 12px; font-size: 13px; background: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary) !important; box-shadow: none;" href="/meetings/{{ m.id }}">View Minutes</a>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% else %}
-<div class="empty">
-  <p>No meetings yet.</p>
+<div class="empty-state">
+  <div class="empty-icon">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184" />
+    </svg>
+  </div>
+  <p>You haven't processed any meetings yet.</p>
   <a class="btn" href="/upload">Upload your first recording</a>
 </div>
 {% endif %}

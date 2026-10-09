@@ -11,18 +11,14 @@ log = logging.getLogger("mom")
 # Rough budget: ~4 chars per token. Leave room for prompt + JSON output.
 CHARS_PER_TOKEN = 4
 
-PROMPT = """You are a professional meeting-minutes extraction agent.
-
-Analyze the meeting transcript below and return ONLY valid JSON matching the schema.
+PROMPT = """You are a professional municipal clerk and meeting-minutes agent. Analyze the meeting transcript below and return ONLY valid JSON matching the schema.
 
 Rules:
-1. Only use information explicitly present in the transcript.
+1. Only use information explicitly present in the transcript. 
 2. Never invent participants, dates, decisions, or responsibilities.
-3. If information is unavailable, use an empty string or empty list.
-4. Keep the summary concise but informative (3-6 sentences).
-5. Extract every concrete action item that is mentioned.
-6. Use "Not specified" for an action item's responsible_person or status if unknown.
-7. If a meeting date is not stated in the transcript, use: "{meeting_date}".
+3. CRITICAL: In the "summary" field, write a comprehensive, formal, and chronological record of the meeting. Use standard municipal markdown headers (e.g., "### 1. Call to Order", "### 2. Approval of the Agenda", "### 3. New Business") to capture the narrative flow. Do NOT write a brief summary; write the full chronological minutes here.
+4. Extract specific action items, decisions, and participants into their respective arrays for quick reference.
+5. If a meeting date is not stated in the transcript, use: "{meeting_date}".
 
 EXPECTED JSON SCHEMA:
 {{
@@ -45,10 +41,8 @@ EXPECTED JSON SCHEMA:
 
 {part_note}
 MEETING TRANSCRIPT:
-
 {transcript}
 """
-
 
 def chunk_text(text: str, max_chars: int) -> list[str]:
     """Split on sentence-ish boundaries so each chunk is <= max_chars."""
@@ -140,7 +134,10 @@ class MeetingAgent:
             if start == -1 or end == -1:
                 raise ValueError("no JSON object found")
             raw = raw[start:end + 1]
-        data = json.loads(raw)
+        import json_repair
+        data = json_repair.loads(raw)
+        if not isinstance(data, dict):
+            raise ValueError("Parsed JSON is not a dictionary")
         for item in data.get("action_items", []) or []:
             if isinstance(item, dict):
                 for k in ("responsible_person", "status"):
@@ -169,14 +166,18 @@ class MeetingAgent:
         return merged
 
     def _consolidate_summary(self, summaries: list[str]) -> str:
-        joined = "\n".join(f"- {s}" for s in summaries)
+        joined = "\n\n---\n\n".join(summaries)
         prompt = (
-            "Combine these partial summaries of one meeting into a single concise summary "
-            "(3-6 sentences). Use only the information given. Reply with the summary text only.\n\n"
-            + joined
+            "You are a professional municipal clerk. Below are chronological segments "
+            "of meeting minutes extracted from different parts of a long recording.\n\n"
+            "Merge these segments into a single, cohesive, and formal chronological document. "
+            "Preserve standard municipal headers (e.g., '1. Call to Order', 'New Business') "
+            "and ensure the narrative flows logically from start to finish. Do NOT shorten "
+            "or omit any agenda items or discussions. Reply with the formatted markdown text only.\n\n"
+            f"{joined}"
         )
         try:
             return self.llm.generate(prompt).strip()
-        except Exception:  # summary is nice-to-have; never fail the job over it
+        except Exception:
             log.exception("Summary consolidation failed; falling back to concatenation")
-            return " ".join(summaries)
+            return "\n\n".join(summaries)

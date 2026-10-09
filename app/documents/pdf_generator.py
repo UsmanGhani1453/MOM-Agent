@@ -3,11 +3,32 @@ from fpdf import FPDF
 
 from app.schemas import MeetingMinutes
 
+from app.schemas import MeetingMinutes
+
+
+def _sanitize(text: str) -> str:
+    if not text:
+        return ""
+    # Replace common unsupported Unicode characters with ASCII equivalents
+    text = text.replace("’", "'").replace("‘", "'").replace("“", '"').replace("”", '"')
+    text = text.replace("—", "-").replace("–", "-").replace("…", "...")
+    text = text.replace("•", "-")
+    
+    # fpdf2 crashes if a single unbroken word is wider than the page.
+    # Forcefully insert a space into ANY sequence of 70+ non-space characters.
+    import re
+    text = re.sub(r'[-=_*]{10,}', '---', text)
+    text = re.sub(r'(\S{70})(?=\S)', r'\1 ', text)
+    
+    text = text.replace("•", "-")
+    # Force encode to latin-1 to avoid fpdf2 crashes on other emojis/unicode
+    return text.encode('latin-1', 'replace').decode('latin-1')
+
 
 def _add_bullets(pdf: FPDF, items: list[str]) -> None:
     if not items:
         pdf.set_font("helvetica", "I", 11)
-        pdf.multi_cell(0, 7, "None recorded.")
+        pdf.multi_cell(0, 7, "None recorded.", new_x="LMARGIN", new_y="NEXT")
         pdf.set_font("helvetica", "", 11)
         pdf.ln(2)
         return
@@ -15,7 +36,7 @@ def _add_bullets(pdf: FPDF, items: list[str]) -> None:
     for item in items:
         pdf.set_font("helvetica", "", 11)
         # using a simple dash instead of a complex bullet character for compatibility
-        pdf.multi_cell(0, 7, f"- {item}")
+        pdf.multi_cell(0, 7, _sanitize(f"- {item}"), new_x="LMARGIN", new_y="NEXT")
     pdf.ln(2)
 
 
@@ -26,14 +47,14 @@ def generate_pdf(minutes: MeetingMinutes, out_path: Path, fallback_title: str = 
 
     # Title
     pdf.set_font("helvetica", "B", 16)
-    title = minutes.meeting_title or fallback_title
-    pdf.multi_cell(0, 10, title)
+    title = _sanitize(minutes.meeting_title or fallback_title)
+    pdf.multi_cell(0, 10, title, new_x="LMARGIN", new_y="NEXT")
 
     # Subtitle
     pdf.set_font("helvetica", "I", 11)
     pdf.set_text_color(89, 89, 89)
-    sub = "Minutes of Meeting" + (f"  |  {minutes.date}" if minutes.date else "")
-    pdf.multi_cell(0, 8, sub)
+    sub = _sanitize("Minutes of Meeting" + (f"  |  {minutes.date}" if minutes.date else ""))
+    pdf.multi_cell(0, 8, sub, new_x="LMARGIN", new_y="NEXT")
     pdf.set_text_color(0, 0, 0)
     pdf.ln(5)
 
@@ -46,7 +67,7 @@ def generate_pdf(minutes: MeetingMinutes, out_path: Path, fallback_title: str = 
     pdf.set_font("helvetica", "B", 14)
     pdf.cell(0, 10, "Summary", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("helvetica", "", 11)
-    pdf.multi_cell(0, 7, minutes.summary or "No summary available.")
+    pdf.multi_cell(0, 7, _sanitize(minutes.summary or "No summary available."), new_x="LMARGIN", new_y="NEXT")
     pdf.ln(5)
 
     # Discussion Points
@@ -82,9 +103,9 @@ def generate_pdf(minutes: MeetingMinutes, out_path: Path, fallback_title: str = 
             resp = a.responsible_person[:20] + "..." if len(a.responsible_person) > 23 else a.responsible_person
             stat = a.status[:20] + "..." if len(a.status) > 23 else a.status
             
-            pdf.cell(col1, 10, task, border=1)
-            pdf.cell(col2, 10, resp, border=1)
-            pdf.cell(col3, 10, stat, border=1, new_x="LMARGIN", new_y="NEXT")
+            pdf.cell(col1, 10, _sanitize(task), border=1)
+            pdf.cell(col2, 10, _sanitize(resp), border=1)
+            pdf.cell(col3, 10, _sanitize(stat), border=1, new_x="LMARGIN", new_y="NEXT")
         pdf.ln(5)
     else:
         pdf.set_font("helvetica", "I", 11)

@@ -1,16 +1,24 @@
 {% extends "base.html" %}
-{% block title %}Upload meeting{% endblock %}
+{% block title %}Upload Meeting | MOM Agent{% endblock %}
 {% block content %}
-<h1>Upload meeting</h1>
+<h1>Upload New Meeting</h1>
 {% if error %}<p class="alert error">{{ error }}</p>{% endif %}
-<form class="card" action="/upload" method="post" enctype="multipart/form-data" id="upload-form">
-  <label>Recording <small>(mp3, wav, m4a, mp4, webm, ogg, flac - up to {{ max_mb }} MB)</small>
+<form class="card" action="/upload" method="post" enctype="multipart/form-data" id="upload-form" style="max-width: 600px;">
+  <div class="form-group">
+    <label>Recording File</label>
+    <span class="hint">Supported formats: mp3, wav, m4a, mp4, webm, ogg, flac (Up to {{ max_mb }} MB)</span>
     <input type="file" name="file" accept=".mp3,.wav,.m4a,.mp4,.webm,.ogg,.flac" required>
-  </label>
-  <label>Meeting date
+  </div>
+  <div class="form-group">
+    <label>Meeting Date</label>
     <input type="date" name="meeting_date" value="{{ today }}">
-  </label>
-  <button class="btn" type="submit">Upload &amp; generate minutes</button>
-  <p class="muted" id="upload-note" hidden>Uploading... large files can take a moment.</p>
+  </div>
+  <button class="btn" type="submit" style="width: 100%; justify-content: center; padding: 12px;">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+    </svg>
+    Upload &amp; Generate Minutes
+  </button>
+  <p class="hint" id="upload-note" hidden style="text-align: center; margin-top: 16px;">Uploading... large files can take a moment.</p>
 </form>
 {% endblock %}

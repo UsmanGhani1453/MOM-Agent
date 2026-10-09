@@ -1,74 +1,134 @@
 {% extends "base.html" %}
-{% block title %}{{ (m.minutes.meeting_title if m.minutes else m.filename) }}{% endblock %}
+{% block title %}{{ m.title }} | MOM Agent{% endblock %}
 {% block content %}
-<div id="job" data-id="{{ m.id }}" data-status="{{ m.status }}"></div>
 
-{% if m.status in ("queued", "processing") %}
-  <h1>{{ m.filename }}</h1>
-  <div class="card center">
-    <div class="spinner"></div>
-    <p class="stage" id="stage">{{ m.stage or "Queued" }}...</p>
-    <p class="muted">This page updates automatically. Long recordings can take several minutes.</p>
-  </div>
-
-{% elif m.status == "failed" %}
-  <h1>{{ m.filename }}</h1>
-  <p class="alert error"><strong>Processing failed:</strong> {{ m.error }}</p>
-  <div class="row">
-    <form method="post" action="/meetings/{{ m.id }}/retry"><button class="btn">Retry</button></form>
-    <form method="post" action="/meetings/{{ m.id }}/delete"
-          onsubmit="return confirm('Delete this meeting?')"><button class="btn danger">Delete</button></form>
-  </div>
-  {% if m.transcript %}<p class="muted">The transcript was saved, so Retry skips transcription.</p>{% endif %}
-
-{% else %}
-  {% set x = m.minutes %}
-  <div class="row between">
-    <div>
-      <h1>{{ x.meeting_title or m.filename }}</h1>
-      <p class="muted">{{ x.date or m.meeting_date }} &middot; {{ m.filename }}</p>
-    </div>
-    <div class="row">
-      <a class="btn" href="/meetings/{{ m.id }}/download">Download .pdf</a>
-      <form method="post" action="/meetings/{{ m.id }}/delete"
-            onsubmit="return confirm('Delete this meeting?')"><button class="btn danger">Delete</button></form>
+<div class="meeting-header">
+  <div>
+    <h1 style="margin-bottom: 0;">{{ m.title }}</h1>
+    <div class="meeting-meta">
+      <span>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5m-9-6h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm0 2.25h.008v.008H12v-.008ZM9.75 15h.008v.008H9.75V15Zm0 2.25h.008v.008H9.75v-.008ZM7.5 15h.008v.008H7.5V15Zm0 2.25h.008v.008H7.5v-.008Zm6.75-4.5h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V15Zm0 2.25h.008v.008h-.008v-.008Zm2.25-4.5h.008v.008H16.5v-.008Zm0 2.25h.008v.008H16.5V15Z" />
+        </svg>
+        {{ m.meeting_date }}
+      </span>
+      <span>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+        </svg>
+        {{ m.filename }}
+      </span>
     </div>
   </div>
-
-  <section class="card"><h2>Summary</h2><p>{{ x.summary or "No summary available." }}</p></section>
-
-  <div class="grid">
-    <section class="card"><h2>Participants</h2>
-      {% if x.participants %}<ul>{% for i in x.participants %}<li>{{ i }}</li>{% endfor %}</ul>{% else %}<p class="muted">None recorded.</p>{% endif %}
-    </section>
-    <section class="card"><h2>Decisions</h2>
-      {% if x.decisions %}<ul>{% for i in x.decisions %}<li>{{ i }}</li>{% endfor %}</ul>{% else %}<p class="muted">None recorded.</p>{% endif %}
-    </section>
+  <div style="display: flex; gap: 12px;">
+    {% if m.status == 'done' %}
+      <a class="btn" href="/meetings/{{ m.id }}/download">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+        </svg>
+        Download .pdf
+      </a>
+    {% endif %}
+    <form method="post" action="/meetings/{{ m.id }}/delete" onsubmit="return confirm('Delete this meeting?')">
+      <button class="btn danger" style="padding: 10px;">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="margin: 0">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+        </svg>
+      </button>
+    </form>
   </div>
+</div>
 
-  <section class="card"><h2>Discussion points</h2>
-    {% if x.discussion_points %}<ul>{% for i in x.discussion_points %}<li>{{ i }}</li>{% endfor %}</ul>{% else %}<p class="muted">None recorded.</p>{% endif %}
-  </section>
-
-  <section class="card"><h2>Action items</h2>
-    {% if x.action_items %}
-    <table class="list"><thead><tr><th>Task</th><th>Responsible</th><th>Status</th></tr></thead><tbody>
-      {% for a in x.action_items %}<tr><td>{{ a.task }}</td><td>{{ a.responsible_person }}</td><td>{{ a.status }}</td></tr>{% endfor %}
-    </tbody></table>
-    {% else %}<p class="muted">None recorded.</p>{% endif %}
-  </section>
-
-  <div class="grid">
-    <section class="card"><h2>Important topics</h2>
-      {% if x.important_topics %}<ul>{% for i in x.important_topics %}<li>{{ i }}</li>{% endfor %}</ul>{% else %}<p class="muted">None recorded.</p>{% endif %}
-    </section>
-    <section class="card"><h2>Next steps</h2>
-      {% if x.next_steps %}<ul>{% for i in x.next_steps %}<li>{{ i }}</li>{% endfor %}</ul>{% else %}<p class="muted">None recorded.</p>{% endif %}
-    </section>
+{% if m.status == 'failed' %}
+<div class="alert error">
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 24px; height: 24px;">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2.m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3Z" />
+  </svg>
+  <div>
+    <strong>Processing Failed:</strong> {{ m.error }}
+    <form method="post" action="/meetings/{{ m.id }}/retry" style="margin-top: 12px;">
+      <button class="btn small">Retry Processing</button>
+    </form>
   </div>
+</div>
+{% elif m.status != 'done' %}
+<div class="card" style="text-align: center; padding: 60px 20px;">
+  <div class="spinner"></div>
+  <h3>Processing Meeting...</h3>
+  <p class="hint">Current stage: <strong>{{ m.stage }}</strong></p>
+  <script>setTimeout(() => location.reload(), 3000);</script>
+</div>
+{% endif %}
 
-  <details class="card"><summary>Full transcript</summary>
-    <p class="transcript">{{ m.transcript }}</p>
-  </details>
+{% if m.minutes %}
+{% set x = m.minutes %}
+<div class="meeting-grid">
+  <!-- Left Column: Document -->
+  <div>
+    <div class="card">
+      <h2 style="margin-top: 0;">Formal Minutes</h2>
+      <div class="markdown-body">
+        {{ x.summary or "No summary available." }}
+      </div>
+    </div>
+    
+    <div class="card">
+      <h2 style="margin-top: 0;">Transcript</h2>
+      <details>
+        <summary>View Full Transcript</summary>
+        <div class="transcript-box" style="margin-top: 12px;">{{ m.transcript }}</div>
+      </details>
+    </div>
+  </div>
+  
+  <!-- Right Column: Metadata & Action Items -->
+  <div>
+    <div class="card" style="padding: 20px;">
+      <h2 style="margin-top: 0;">Action Items</h2>
+      {% if x.action_items %}
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+        {% for a in x.action_items %}
+          <div style="background: var(--bg); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+            <div style="font-weight: 500; font-size: 14px; margin-bottom: 4px;">{{ a.task }}</div>
+            <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted);">
+              <span>Assignee: <strong>{{ a.responsible_person }}</strong></span>
+              <span style="text-transform: capitalize;">{{ a.status }}</span>
+            </div>
+          </div>
+        {% endfor %}
+        </div>
+      {% else %}
+        <p class="hint">None recorded.</p>
+      {% endif %}
+    </div>
+
+    <div class="card" style="padding: 20px;">
+      <h2 style="margin-top: 0;">Participants</h2>
+      {% if x.participants %}
+        <ul>{% for i in x.participants %}<li>{{ i }}</li>{% endfor %}</ul>
+      {% else %}
+        <p class="hint">None recorded.</p>
+      {% endif %}
+    </div>
+    
+    <div class="card" style="padding: 20px;">
+      <h2 style="margin-top: 0;">Decisions Made</h2>
+      {% if x.decisions %}
+        <ul>{% for i in x.decisions %}<li>{{ i }}</li>{% endfor %}</ul>
+      {% else %}
+        <p class="hint">None recorded.</p>
+      {% endif %}
+    </div>
+
+    <div class="card" style="padding: 20px;">
+      <h2 style="margin-top: 0;">Next Steps</h2>
+      {% if x.next_steps %}
+        <ul>{% for i in x.next_steps %}<li>{{ i }}</li>{% endfor %}</ul>
+      {% else %}
+        <p class="hint">None recorded.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
 {% endif %}
 {% endblock %}
